@@ -24,25 +24,32 @@ const {
 // Build pool configuration. Support either DATABASE_URL (preferred) or individual PG_* vars.
 let poolConfig = {};
 
+// Resolve non-secret connection details for debug logging
+let resolvedHost;
+let resolvedPort;
+let resolvedServername;
+
 if (DATABASE_URL) {
-  // If using a full connection string, ensure SSL and SNI (servername) are provided for Supabase pooler
-  let servername = SUPABASE_SNI_HOST;
-  if (!servername) {
-    try {
-      const url = new URL(DATABASE_URL);
-      servername = url.hostname;
-    } catch (e) {
-      // ignore
-    }
+  try {
+    const url = new URL(DATABASE_URL);
+    resolvedHost = url.hostname;
+    resolvedPort = url.port || "6543";
+  } catch (e) {
+    // ignore
   }
+  resolvedServername = SUPABASE_SNI_HOST || resolvedHost;
 
   poolConfig.connectionString = DATABASE_URL;
   poolConfig.ssl = {
     rejectUnauthorized: false,
     // SNI required by Supabase pooler in many cases
-    servername
+    servername: resolvedServername
   };
 } else if (PGHOST && PGUSER && PGPASSWORD) {
+  resolvedHost = PGHOST;
+  resolvedPort = PGPORT ? String(PGPORT) : "6543";
+  resolvedServername = SUPABASE_SNI_HOST || PGHOST;
+
   poolConfig = {
     host: PGHOST,
     port: PGPORT ? Number(PGPORT) : 6543,
@@ -51,33 +58,50 @@ if (DATABASE_URL) {
     database: PGDATABASE || "postgres",
     ssl: {
       rejectUnauthorized: false,
-      servername: SUPABASE_SNI_HOST || PGHOST
+      servername: resolvedServername
     }
   };
 } else {
   console.error("Missing database configuration. Set DATABASE_URL or PGHOST/PGUSER/PGPASSWORD environment variables.");
-  process.exit(1);
+  // Do not exit immediately — allow server to start for debugging, but log clearly
 }
+
+// Non-secret debug log to help confirm what the app will send in SNI
+console.log("DB debug (non-secret):", {
+  usingDatabaseUrl: !!DATABASE_URL,
+  host: resolvedHost,
+  port: resolvedPort,
+  servername: resolvedServername
+});
 
 const pool = new Pool(poolConfig);
 
 // 🧩 Ensure table exists (fallback for total / total_price)
 async function ensureTables() {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS orders (
-      id SERIAL PRIMARY KEY,
-      restaurant_id TEXT,
-      customer_name TEXT,
-      table_no TEXT,
-      items JSONB,
-      notes TEXT,
-      total NUMERIC, -- fallback legacy column
-      total_price NUMERIC, -- new column for updated code
-      status TEXT DEFAULT 'pending',
-      placed_at TIMESTAMP DEFAULT NOW()
-    );
-  `);
-  console.log("✅ Orders table ready (with total and total_price columns)");
+  try {
+    if (!pool) {
+      console.error("No pool configured; skipping ensureTables.");
+      return;
+    }
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS orders (
+        id SERIAL PRIMARY KEY,
+        restaurant_id TEXT,
+        customer_name TEXT,
+        table_no TEXT,
+        items JSONB,
+        notes TEXT,
+        total NUMERIC, -- fallback legacy column
+        total_price NUMERIC, -- new column for updated code
+        status TEXT DEFAULT 'pending',
+        placed_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+    console.log("✅ Orders table ready (with total and total_price columns)");
+  } catch (err) {
+    console.error("❌ Could not ensure tables (DB error):", err.message);
+    // Do not throw — keep server running so you can inspect logs and fix envs
+  }
 }
 
 // 🟢 Create new order
@@ -166,6 +190,7 @@ app.get("/", (_, res) => res.send("✅ Nevolt backend running!"));
 // 🚀 Start server
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, async () => {
-  await ensureTables();
   console.log(`🚀 Server running on port ${PORT}`);
+  // Attempt to create tables, but don't exit on failure
+  await ensureTables();
 });
