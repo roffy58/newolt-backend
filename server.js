@@ -10,17 +10,11 @@ app.use(express.json());
 // 🟢 PostgreSQL connection
 
 const pool = new Pool({
-  host: "db.xxpwstplqknvwjfaldig.supabase.co", // <--- Direct Database Host URL
-  port: 5432,                                   // <--- Direct Standard Port
-  user: "postgres",                             // <--- Clean Username
-  password: "Sourabhbhai1234",
-  database: "postgres",
+  connectionString: "postgres://postgres:Sourabhbhai1234@aws-0-ap-south-1.pooler.supabase.com:5432/postgres?options=-c%20project%3Dxxpwstplqknvwjfaldig",
   ssl: { 
     rejectUnauthorized: false
   }
 });
-
-
 
 // 🧩 Ensure table exists (fallback for total / total_price)
 async function ensureTables() {
