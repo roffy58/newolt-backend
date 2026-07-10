@@ -1,41 +1,24 @@
-  import express from "express";
+import express from "express";
 import cors from "cors";
 import { google } from "googleapis";
-import dotenv from "dotenv";
-
-dotenv.config();
+import path from "path";
 
 const app = express();
 app.use(cors({ origin: "*" }));
 app.use(express.json());
 
-// ⚡ ROBUST JWT AUTH: Parsing error se bachne ke liye direct assignment
+// 📁 FILE-BASED AUTH: Parsing error khatam, direct file read hogi
 let sheets;
 try {
-  if (process.env.GOOGLE_CREDS_JSON) {
-    // Agar parse error aa raha hai, toh hum JSON.parse() hatakar 
-    // direct string ya pre-parsed object expect karenge.
-    // Yahan hum try karenge ki agar parse fail ho, toh fallback use karein.
-    let credentials;
-    try {
-      credentials = JSON.parse(process.env.GOOGLE_CREDS_JSON);
-    } catch (e) {
-      console.log("⚠️ JSON parse failed, trying direct env fallback...");
-      credentials = JSON.parse(process.env.GOOGLE_CREDS_JSON.replace(/\\n/g, '\n'));
-    }
+  const auth = new google.auth.GoogleAuth({
+    keyFile: path.join(process.cwd(), "service-account.json"), // Folder mein padi file ka path
+    scopes: ["https://www.googleapis.com/auth/spreadsheets"],
+  });
 
-    const auth = new google.auth.JWT(
-      credentials.client_email,
-      null,
-      credentials.private_key,
-      ["https://www.googleapis.com/auth/spreadsheets"]
-    );
-
-    sheets = google.sheets({ version: "v4", auth });
-    console.log("✅ Google Sheets Auth Initialized!");
-  }
+  sheets = google.sheets({ version: "v4", auth });
+  console.log("✅ Google Sheets Auth Initialized via local file!");
 } catch (err) {
-  console.error("❌ Auth Error:", err.message);
+  console.error("❌ Auth Error (Check if service-account.json exists in root):", err.message);
 }
 
 const SPREADSHEET_ID = process.env.GOOGLE_SHEET_ID;
@@ -118,7 +101,7 @@ app.patch("/api/orders/:id", async (req, res) => {
   }
 });
 
-app.get("/", (_, res) => res.send("✅ Nevolt API is live!"));
+app.get("/", (_, res) => res.send("✅ Nevolt API is live with File-Auth!"));
 
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
