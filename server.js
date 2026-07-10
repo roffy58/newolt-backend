@@ -31,20 +31,20 @@ let resolvedServername;
 
 if (DATABASE_URL) {
   try {
+    // Agar URL ke peeche extra params hain toh unhe saaf karne ke liye clean URL banate hain
     const url = new URL(DATABASE_URL);
     resolvedHost = url.hostname;
     resolvedPort = url.port || "6543";
-  } catch (e) {
-    // ignore
-  }
-  resolvedServername = SUPABASE_SNI_HOST || resolvedHost;
+    resolvedServername = SUPABASE_SNI_HOST || url.hostname;
 
-  poolConfig.connectionString = DATABASE_URL;
-  poolConfig.ssl = {
-    rejectUnauthorized: false,
-    // SNI required by Supabase pooler in many cases
-    servername: resolvedServername
-  };
+    poolConfig.connectionString = DATABASE_URL;
+    poolConfig.ssl = {
+      rejectUnauthorized: false,
+      servername: resolvedServername
+    };
+  } catch (e) {
+    console.error("Malformed DATABASE_URL:", e.message);
+  }
 } else if (PGHOST && PGUSER && PGPASSWORD) {
   resolvedHost = PGHOST;
   resolvedPort = PGPORT ? String(PGPORT) : "6543";
@@ -63,7 +63,6 @@ if (DATABASE_URL) {
   };
 } else {
   console.error("Missing database configuration. Set DATABASE_URL or PGHOST/PGUSER/PGPASSWORD environment variables.");
-  // Do not exit immediately — allow server to start for debugging, but log clearly
 }
 
 // Non-secret debug log to help confirm what the app will send in SNI
@@ -100,7 +99,6 @@ async function ensureTables() {
     console.log("✅ Orders table ready (with total and total_price columns)");
   } catch (err) {
     console.error("❌ Could not ensure tables (DB error):", err.message);
-    // Do not throw — keep server running so you can inspect logs and fix envs
   }
 }
 
@@ -110,7 +108,6 @@ app.post("/api/orders", async (req, res) => {
     const { restaurant_id, customer_name, table_no, items, notes, total } = req.body;
     const totalValue = parseFloat(total) || 0;
 
-    // Try inserting using total_price, fallback to total if needed
     let result;
     try {
       result = await pool.query(
@@ -120,7 +117,6 @@ app.post("/api/orders", async (req, res) => {
         [restaurant_id, customer_name, table_no, JSON.stringify(items), notes || "", totalValue]
       );
     } catch (err) {
-      // fallback for older DBs that have only 'total'
       result = await pool.query(
         `INSERT INTO orders (restaurant_id, customer_name, table_no, items, notes, total, status)
          VALUES ($1, $2, $3, $4, $5, $6, 'pending')
@@ -191,6 +187,5 @@ app.get("/", (_, res) => res.send("✅ Nevolt backend running!"));
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, async () => {
   console.log(`🚀 Server running on port ${PORT}`);
-  // Attempt to create tables, but don't exit on failure
   await ensureTables();
 });
