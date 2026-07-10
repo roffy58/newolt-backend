@@ -10,17 +10,17 @@ const app = express();
 app.use(cors({ origin: "*" }));
 app.use(express.json());
 
-// Google Sheets Authorization Setup (Clean formatting for complete key)
+// ⚡ CRASH-PROOF KEY FORMATTING: \n characters ko sahi se convert karne ke liye
 const formattedKey = process.env.GOOGLE_PRIVATE_KEY 
   ? process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, "\n").replace(/^["']|["']$/g, '') 
   : '';
 
-const auth = new google.auth.JWT(
-  process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-  null,
-  formattedKey,
-  ["https://www.googleapis.com/auth/spreadsheets"]
-);
+// 🛠️ FLEXIBLE AUTH SETUP: Strict parameter position hata kar direct object pass kiya hai
+const auth = new google.auth.JWT({
+  email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
+  key: formattedKey,
+  scopes: ["https://www.googleapis.com/auth/spreadsheets"]
+});
 
 const sheets = google.sheets({ version: "v4", auth });
 const SPREADSHEET_ID = process.env.GOOGLE_SHEET_ID;
