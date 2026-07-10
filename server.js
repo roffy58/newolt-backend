@@ -1,9 +1,7 @@
- 
 import express from "express";
 import cors from "cors";
 import { google } from "googleapis";
 import dotenv from "dotenv";
-import path from "path"; // 👈 File path handle karne ke liye
 
 dotenv.config();
 
@@ -11,11 +9,21 @@ const app = express();
 app.use(cors({ origin: "*" }));
 app.use(express.json());
 
-// 📁 Direct JSON file se auth setup (Bina kisi string convert/decoder jhanjhat ke)
-const auth = new google.auth.GoogleAuth({
-  keyFile: path.join(process.cwd(), "newolt-db-9b4bd56ccb02.json"), // Aapki downloaded file ka naam
-  scopes: ["https://www.googleapis.com/auth/spreadsheets"],
-});
+// ⚡ DIRECT JSON OBJECT AUTH: Render local file ke nakhro se bachne ke liye direct memory auth
+let auth;
+try {
+  if (process.env.GOOGLE_CREDS_JSON) {
+    const credentials = JSON.parse(process.env.GOOGLE_CREDS_JSON);
+    auth = new google.auth.GoogleAuth({
+      credentials,
+      scopes: ["https://www.googleapis.com/auth/spreadsheets"],
+    });
+  } else {
+    console.error("❌ GOOGLE_CREDS_JSON variable is completely missing in Render environment!");
+  }
+} catch (err) {
+  console.error("❌ Error parsing GOOGLE_CREDS_JSON string:", err.message);
+}
 
 const sheets = google.sheets({ version: "v4", auth });
 const SPREADSHEET_ID = process.env.GOOGLE_SHEET_ID;
@@ -129,5 +137,3 @@ const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });
-
-  
