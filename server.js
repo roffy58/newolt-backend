@@ -1,23 +1,28 @@
- import express from "express";
+import express from "express";
 import cors from "cors";
 import { google } from "googleapis";
 import path from "path";
+import fs from "fs"; // fs import add kiya
 
 const app = express();
 app.use(cors({ origin: "*" }));
 app.use(express.json());
 
-// ⚡ GLOBAL AUTH SETUP
-const KEYFILEPATH = path.join(process.cwd(), "service-account.json");
-const auth = new google.auth.GoogleAuth({
-  keyFile: KEYFILEPATH,
-  scopes: ["https://www.googleapis.com/auth/spreadsheets"],
-});
+// ⚡ BULLET-PROOF AUTH: File ko manual read karke JWT se setup
+function getSheetsInstance() {
+  const KEYFILEPATH = path.join(process.cwd(), "service-account.json");
+  
+  // File ko manually read aur parse kar rahe hain
+  const credentials = JSON.parse(fs.readFileSync(KEYFILEPATH, 'utf8'));
 
-// Sheet helper jo auth check karega
-async function getSheetsInstance() {
-  const authClient = await auth.getClient();
-  return google.sheets({ version: "v4", auth: authClient });
+  const auth = new google.auth.JWT(
+    credentials.client_email,
+    null,
+    credentials.private_key,
+    ["https://www.googleapis.com/auth/spreadsheets"]
+  );
+
+  return google.sheets({ version: "v4", auth });
 }
 
 const SPREADSHEET_ID = process.env.GOOGLE_SHEET_ID;
@@ -34,7 +39,7 @@ app.post("/api/orders", async (req, res) => {
 
     const newRow = [orderId, restaurant_id, customer_name, table_no, typeof items === "object" ? JSON.stringify(items) : items, notes || "", total || 0, status, placed_at];
 
-    const sheets = await getSheetsInstance(); // Yahan dynamic init ho raha hai
+    const sheets = getSheetsInstance(); // Manual client
     await sheets.spreadsheets.values.append({
       spreadsheetId: SPREADSHEET_ID,
       range: RANGE,
@@ -54,7 +59,7 @@ app.patch("/api/orders/:id", async (req, res) => {
     const { id } = req.params;
     const { status } = req.body;
     
-    const sheets = await getSheetsInstance();
+    const sheets = getSheetsInstance();
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
       range: RANGE
