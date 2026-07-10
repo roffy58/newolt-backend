@@ -2,24 +2,20 @@ import express from "express";
 import cors from "cors";
 import { google } from "googleapis";
 import path from "path";
+import fs from "fs";
 
 const app = express();
 app.use(cors({ origin: "*" }));
 app.use(express.json());
 
-// 📁 FILE-BASED AUTH: Parsing error khatam, direct file read hogi
-let sheets;
-try {
-  const auth = new google.auth.GoogleAuth({
-    keyFile: path.join(process.cwd(), "service-account.json"), // Folder mein padi file ka path
-    scopes: ["https://www.googleapis.com/auth/spreadsheets"],
-  });
+// 📁 FILE-BASED AUTH: Explicitly loading credentials
+const KEYFILEPATH = path.join(process.cwd(), "service-account.json");
+const SCOPES = ["https://www.googleapis.com/auth/spreadsheets"];
 
-  sheets = google.sheets({ version: "v4", auth });
-  console.log("✅ Google Sheets Auth Initialized via local file!");
-} catch (err) {
-  console.error("❌ Auth Error (Check if service-account.json exists in root):", err.message);
-}
+const auth = new google.auth.GoogleAuth({
+  keyFile: KEYFILEPATH,
+  scopes: SCOPES,
+});
 
 const SPREADSHEET_ID = process.env.GOOGLE_SHEET_ID;
 const RANGE = "Sheet1!A:I";
@@ -27,6 +23,10 @@ const RANGE = "Sheet1!A:I";
 // Helper function: Google Sheet mein row add karne ke liye
 async function appendToSheet(rowData) {
   try {
+    // Auth ko har baar yahan se fetch karna sabse safe hai
+    const authClient = await auth.getClient();
+    const sheets = google.sheets({ version: "v4", auth: authClient });
+
     await sheets.spreadsheets.values.append({
       spreadsheetId: SPREADSHEET_ID,
       range: RANGE,
@@ -42,6 +42,9 @@ async function appendToSheet(rowData) {
 // Helper function: Status update
 async function updateOrderStatusInSheet(orderId, newStatus) {
   try {
+    const authClient = await auth.getClient();
+    const sheets = google.sheets({ version: "v4", auth: authClient });
+
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
       range: RANGE
@@ -101,7 +104,7 @@ app.patch("/api/orders/:id", async (req, res) => {
   }
 });
 
-app.get("/", (_, res) => res.send("✅ Nevolt API is live with File-Auth!"));
+app.get("/", (_, res) => res.send("✅ Nevolt API is live!"));
 
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
