@@ -13,5 +13,8 @@
     "express": "^4.19.2",
     "googleapis": "^140.0.0",
     "stripe": "^15.0.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
   }
 }
