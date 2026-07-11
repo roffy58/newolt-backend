@@ -31,7 +31,7 @@ function getSheetsInstance() {
   return google.sheets({ version: "v4", auth });
 }
 
-const SPREADSHEET_ID = process.env.GOOGLE_SHEET_ID;
+const SPREADSHEET_ID = "1FtVFv0QBzmoMSFpV4EjFvZRoaLBysF_JfU7IBy9oQZk";
 const RANGE = "Sheet1!A:I";
 
 // --- ROUTES ---
