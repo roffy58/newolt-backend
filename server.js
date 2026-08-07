@@ -3,53 +3,16 @@ import cors from "cors";
 import { google } from "googleapis";
 import Stripe from "stripe";
 
+// Stripe initialization using environment variable
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 const app = express();
 app.use(cors({ origin: "*" }));
 app.use(express.json());
 
-// ⚡ HARDCODED AUTH (Using backticks `` to safely handle multiline and escape sequences)
+// ⚡ Dynamic Auth using Environment Variable (Untouched & Safe)
 function getSheetsInstance() {
-  const credentials = {
-    type: "service_account",
-    project_id: "newolt-db",
-    private_key_id: "9b4bd56ccb02d9ba4b07849f817737ee2a1d87d2",
-    private_key: `-----BEGIN PRIVATE KEY-----
-MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDprErd5K7LqUi/
-JcZBnSxXA1FUHOodjlxc85m5ZJXFgYYwXV/0cWUVHEK4+/2ynwBhWZ7bjlDC76J5
-gxJ+9wvK4J3LhOpRGwKma0Yrl03G595dh3pzr/+n6y3TWsj3CCSiYMPpcUYN6Fq6
-Dywe6F8dWN91MY6xmAAB9gF7NJK8EO+7MKruvDxn/e+T1LaI59zHEkriNV44yh01
-VHIPJ1rTLhL7bP2lqjpm8gHacprKrW+2HNtOCKLjuePY+ivOU8XDPZmjoIBKXj3O
-94blXgNQKGBKT0f8e9t5ca7zEACdz9JYM4LAfnuCxFJpJdWaK575KJzcxKtnC90u
-5pXjDyt9AgMBAAECggEAAhDzcoXYo9Vh3srTN3ZP048kc3Vz/oHpQCspQ1Hn3yC3
-koro080C405mKqOTyTYNt06nEHLwNOEQkzl8+uFtWcRlsMyCk+gEvHr7WlxSpD0d
-or8VbptyS8ZRF+rYFxMb29G2OcS2JV5WGwoSTk2otaY5B5zCEcDx0xKdTb0XxRDu
-8d+FTNLH174zwU7xfCEDBhl/bxbRGdtAI5FBywZdBIZlZmvuM4CK0tsATaVO/8WO
-L1+xVyYiwLOe0FIE2pRgS39gWH78Ezy7yCyhaIW+2tPsI1aQJITVD4YDvw8DytPl
-voIcqZl7Qg2uCgHAy/rzs1Iosz8NVqyOEtRGmJo6wQKBgQD8fFbnSA1uYOp1dXrY
-1JpTTT9FsxlVwiyFVMoCqLllkVrYWDYDRc07Anry8PlCg0jPkHdpQ9WfsWB9vsoZ
-er5NmKd/tAupAJJUR3Qu0WrwnDHLTapjhRNAkuv7I8wJRyF7l5hdEp7rZjjXP1xt
-07XKByImNM4nHn1aBa60xaevYQKBgQDs7Otbr3t8u7xzfMzQo/WPK2b+vXdktvUQ
-VlDY2zS7NwpC5AHpngs9ECqQSGcrLxJ6L9xZl5KybSjMZVxkOr5jPRCJwe8mQ+rT
-s/LaG9VO+IjR1a4tiqLh3d/sUpLi3caamq2gLJhIFtRUpcrRQLfLjEL5rglBCTYN
-CpUfrX69nQKBgQC3SixsSco2TvTlwBsmPXCq+HDuUE4cC5H2WM8tjv7H1PV2CNNt
-HMcYB3zp0DWjK1s4E1AcgroZ69J4doCQbqKoAiHWewXb8iZIOHcHZc+UTE95nzAK
-fxiyz/WvoxUDxzdvWWWqa1Ii4VpyJ/UZZY+a0gLgaYUesOue5nElmjdZAQKBgEV/
-WaqTVw3HpAfcW9f3wFg2ywd+XD9Wy5v3Nc/mvRkNlBz69PSqP3GyBEo+csTgEfN1
-hpVhOM7N5mHOecOM17wUdX1zPctjsMZYyqvf7joz/S5QF7+UIyNOChkwP5X8p/1B
-0hxh+GltCOurlkq7SS6T/jFvM5e4M/qvV/7qzXqhAoGAAb/ho/Ja058l1HBjLAUI
-W5Jj3EziqtwFaVqC3ptr8kzZQX8Qaw9GYjeQO9IoQicKgsHF+LfzPFSy8E9ZmJ/I
-7UCo9/YuvUIpNcDtjppyy1kc+l62w9Gz82jOdEjGj31fGfkSW1Q5mRAreZZ0MovM
-Et/lVlOVZFRxgCx1wq/kEoY=
------END PRIVATE KEY-----`,
-    client_email: "newoltdb@newolt-db.iam.gserviceaccount.com",
-    client_id: "111076780535688924970",
-    auth_uri: "https://accounts.google.com/o/oauth2/auth",
-    token_uri: "https://oauth2.googleapis.com/token",
-    auth_provider_x509_cert_url: "https://www.googleapis.com/oauth2/v1/certs",
-    client_x509_cert_url: "https://www.googleapis.com/robot/v1/metadata/x509/newoltdb%40newolt-db.iam.gserviceaccount.com"
-  };
+  const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
 
   const auth = new google.auth.JWT(
     credentials.client_email,
@@ -90,7 +53,7 @@ app.get("/api/orders", async (_, res) => {
       total: row[6],
       status: row[7],
       placed_at: row[8],
-      payment_status: row[9] || "paid",
+      payment_status: row[9] || "paid", 
       paymentMethod: row[9] === "cash_pending" ? "cash" : (row[9] === "cash_received" ? "cash_received" : "paid")
     }));
 
@@ -119,7 +82,7 @@ app.post("/api/orders", async (req, res) => {
       total || 0, 
       status, 
       placed_at,
-      finalPaymentStatus
+      finalPaymentStatus 
     ];
 
     const sheets = getSheetsInstance(); 
@@ -137,9 +100,10 @@ app.post("/api/orders", async (req, res) => {
   }
 });
 
+// --- STRIPE CHECKOUT SESSION ROUTE ---
 app.post("/api/create-checkout-session", async (req, res) => {
   try {
-    const { total, orderId, tableNo, customerName } = req.body;
+    const { items, total, orderId, tableNo, customerName } = req.body;
 
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
@@ -150,7 +114,7 @@ app.post("/api/create-checkout-session", async (req, res) => {
             product_data: {
               name: `Table #${tableNo || 'N/A'} - Order (${customerName || 'Customer'})`,
             },
-            unit_amount: Math.round(Number(total || 0) * 100),
+            unit_amount: Math.round(Number(total || 0) * 100), // Amount in paise
           },
           quantity: 1,
         },
@@ -192,7 +156,8 @@ app.patch("/api/orders/:id", async (req, res) => {
 
     if (rowIndex === -1) return res.status(404).json({ error: "Order not found" });
 
-    if (status) {
+    // Update status (Column H) if provided
+    if (status !== undefined) {
       await sheets.spreadsheets.values.update({
         spreadsheetId: SPREADSHEET_ID,
         range: `Sheet1!H${rowIndex}`,
@@ -201,16 +166,17 @@ app.patch("/api/orders/:id", async (req, res) => {
       });
     }
 
-    if (payment_status) {
+    // Update payment_status (Column J) - Handles Cash Confirmations & updates dynamically for customer view
+    if (payment_status !== undefined) {
       await sheets.spreadsheets.values.update({
         spreadsheetId: SPREADSHEET_ID,
         range: `Sheet1!J${rowIndex}`,
-        valueInputOption: "USER_ENTERED",
+        valueInputOption: "USER_ENTERE_D" in Object ? "USER_ENTERED" : "USER_ENTERED",
         resource: { values: [[payment_status]] }
       });
     }
 
-    res.json({ id, status, payment_status, message: "Updated!" });
+    res.json({ id, status, payment_status, message: "Updated successfully!" });
   } catch (error) {
     console.error("❌ Update Error:", error.message);
     res.status(500).json({ error: error.message });
