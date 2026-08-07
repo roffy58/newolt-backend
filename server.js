@@ -135,8 +135,8 @@ app.post("/api/create-checkout-session", async (req, res) => {
       payment_method_types: ['card'],
       line_items: [{ price_data: { currency: 'inr', product_data: { name: `Table #${tableNo || 'N/A'} - Order (${customerName || 'Customer'})` }, unit_amount: Math.round(Number(total || 0) * 100) }, quantity: 1 }],
       mode: 'payment',
-      success_url: `https://nevolt.netlify.app/`,
-      cancel_url: `https://nevolt.netlify.app/`,
+      success_url: `https://dine-2.onrender.com/`,
+      cancel_url: `https://dine-2.onrender.com/`,
       metadata: { orderId: String(orderId), tableNo: String(tableNo), customerName: String(customerName) },
     });
     res.json({ sessionId: session.id, url: session.url });
