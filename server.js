@@ -57,6 +57,9 @@ app.post("/api/orders", async (req, res) => {
       payment_status, paymentType, paymentStatus, status 
     } = req.body;
 
+    // ⚡ Numeric string ID generate kar rahe hain taaki dashboard ka Number(o.id) filter pass ho sake
+    const customOrderId = Date.now().toString();
+
     const newOrder = {
       restaurant_id,
       customer_name,
@@ -71,8 +74,9 @@ app.post("/api/orders", async (req, res) => {
       paymentStatus: paymentStatus || "pending"
     };
 
-    const docRef = await db.collection('orders').add(newOrder);
-    const savedOrder = { id: docRef.id, ...newOrder };
+    // Use customOrderId as the Firestore Document ID
+    await db.collection('orders').doc(customOrderId).set(newOrder);
+    const savedOrder = { id: customOrderId, ...newOrder };
 
     // ⚡ Real-time alert to Owner Dashboard via WebSocket
     io.emit("newOrder", savedOrder);
@@ -97,6 +101,7 @@ app.post("/api/update-order-status", async (req, res) => {
     const updatedDoc = await orderRef.get();
     res.json({ success: true, order: { id: orderId, ...updatedDoc.data() } });
   } catch (error) {
+    console.error("❌ Update Status Error:", error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -111,6 +116,7 @@ app.patch("/api/orders/:id", async (req, res) => {
     await db.collection('orders').doc(id).update(updateData);
     res.json({ id, ...updateData, message: "Updated in Firebase!" });
   } catch (error) {
+    console.error("❌ Patch Order Error:", error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -128,6 +134,7 @@ app.post("/api/create-checkout-session", async (req, res) => {
     });
     res.json({ sessionId: session.id, url: session.url });
   } catch (error) {
+    console.error("❌ Stripe Error:", error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -135,5 +142,4 @@ app.post("/api/create-checkout-session", async (req, res) => {
 app.get("/", (_, res) => res.send("✅ Nevolt Firebase API & WebSocket is live!"));
 
 const PORT = process.env.PORT || 10000;
-// Note: Use server.listen instead of app.listen when using socket.io
 server.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
