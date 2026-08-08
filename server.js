@@ -2,8 +2,9 @@ import express from "express";
 import cors from "cors";
 import Stripe from "stripe";
 import admin from "firebase-admin";
+import http from "http";
+import { Server } from "socket.io";
 
-// ⚡ Load directly from Environment Variable (No parsing error ever)
 const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
 
 admin.initializeApp({
@@ -13,27 +14,35 @@ const db = admin.firestore();
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 const app = express();
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: { origin: "*" }
+});
+
 app.use(cors({ origin: "*" }));
 app.use(express.json());
+
+// --- SOCKET.IO CONNECTION ---
+io.on("connection", (socket) => {
+  console.log("🟢 Client connected via WebSocket");
+  socket.on("disconnect", () => {
+    console.log("🔴 Client disconnected");
+  });
+});
 
 // --- ROUTES ---
 
 app.get("/api/orders", async (req, res) => {
   try {
     const { restaurant_id } = req.query;
-    
-    // Sirf collection fetch karo, database level par koi index query ki zarurat nahi
     const snapshot = await db.collection('orders').get();
     let orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-    // Filter JavaScript side par karo (No Firebase index required)
     if (restaurant_id) {
       orders = orders.filter(order => order.restaurant_id === restaurant_id);
     }
 
-    // Sort JavaScript side par karo (latest first)
     orders.sort((a, b) => new Date(b.placed_at || 0) - new Date(a.placed_at || 0));
-
     res.json(orders);
   } catch (error) {
     console.error("❌ Fetch Orders Error:", error);
@@ -63,7 +72,12 @@ app.post("/api/orders", async (req, res) => {
     };
 
     const docRef = await db.collection('orders').add(newOrder);
-    res.status(201).json({ id: docRef.id, ...newOrder });
+    const savedOrder = { id: docRef.id, ...newOrder };
+
+    // ⚡ Real-time alert to Owner Dashboard via WebSocket
+    io.emit("newOrder", savedOrder);
+
+    res.status(201).json(savedOrder);
   } catch (error) {
     console.error("❌ Order Creation Error:", error);
     res.status(500).json({ error: error.message });
@@ -118,7 +132,8 @@ app.post("/api/create-checkout-session", async (req, res) => {
   }
 });
 
-app.get("/", (_, res) => res.send("✅ Nevolt Firebase API is live!"));
+app.get("/", (_, res) => res.send("✅ Nevolt Firebase API & WebSocket is live!"));
 
 const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+// Note: Use server.listen instead of app.listen when using socket.io
+server.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
