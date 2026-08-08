@@ -81,19 +81,35 @@ app.get("/api/orders", async (_, res) => {
     }
 
     const dataRows = rows.slice(1);
-    const orders = dataRows.map(row => ({
-      id: row[0],
-      restaurant_id: row[1],
-      customer_name: row[2],
-      table_no: row[3],
-      items: typeof row[4] === 'string' ? JSON.parse(row[4] || "[]") : row[4],
-      notes: row[5],
-      total: row[6],
-      status: row[7],
-      placed_at: row[8],
-      payment_status: row[9] || "paid",
-      paymentMethod: row[9] === "cash_pending" ? "cash" : (row[9] === "cash_received" ? "cash_received" : "paid")
-    }));
+    const orders = dataRows.map(row => {
+      const rawPaymentStatus = (row[9] || "").trim();
+      
+      // Fixed mapping to correctly read cash_received state from Google Sheets
+      let paymentStatusVal = rawPaymentStatus;
+      let paymentMethodVal = "paid";
+
+      if (rawPaymentStatus === "cash_pending") {
+        paymentMethodVal = "cash";
+        paymentStatusVal = "cash_pending";
+      } else if (rawPaymentStatus === "cash_received") {
+        paymentMethodVal = "cash_received";
+        paymentStatusVal = "cash_received";
+      }
+
+      return {
+        id: row[0],
+        restaurant_id: row[1],
+        customer_name: row[2],
+        table_no: row[3],
+        items: typeof row[4] === 'string' ? JSON.parse(row[4] || "[]") : row[4],
+        notes: row[5],
+        total: row[6],
+        status: row[7],
+        placed_at: row[8],
+        payment_status: paymentStatusVal,
+        paymentMethod: paymentMethodVal
+      };
+    });
 
     res.json(orders);
   } catch (error) {
@@ -133,7 +149,6 @@ app.post("/api/create-checkout-session", async (req, res) => {
       payment_method_types: ['card'],
       line_items: [{ price_data: { currency: 'inr', product_data: { name: `Table #${tableNo || 'N/A'} - Order (${customerName || 'Customer'})` }, unit_amount: Math.round(Number(total || 0) * 100) }, quantity: 1 }],
       mode: 'payment',
-      // ⚡ Yahan success_url aur cancel_url add kar diya hai
       success_url: `https://dine-2.onrender.com/?payment=success`,
       cancel_url: `https://dine-2.onrender.com/`,
       metadata: { orderId: String(orderId), tableNo: String(tableNo), customerName: String(customerName) },
