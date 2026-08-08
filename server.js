@@ -68,11 +68,16 @@ const RANGE = "Sheet1!A:J";
 
 app.get("/api/orders", async (_, res) => {
   try {
-    res.setHeader("Cache-Control", "no-store");
+    // ⚡ Disable all caching so fresh Google Sheets data is always fetched
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+
     const sheets = getSheetsInstance();
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
-      range: RANGE
+      range: RANGE,
+      valueRenderOption: "UNFORMATTED_VALUE", // Avoids cached/formatted formula evaluation
     });
 
     const rows = response.data.values;
@@ -82,22 +87,21 @@ app.get("/api/orders", async (_, res) => {
 
     const dataRows = rows.slice(1);
     const orders = dataRows.map(row => {
-      const rawPaymentStatus = (row[9] || "").trim();
+      const rawPaymentStatus = String(row[9] || "").trim().toLowerCase();
       
-      // Fixed mapping to correctly read cash_received state from Google Sheets
       let paymentStatusVal = rawPaymentStatus;
       let paymentMethodVal = "paid";
 
-      if (rawPaymentStatus === "cash_pending") {
+      if (rawPaymentStatus.includes("cash_pending") || rawPaymentStatus === "cash") {
         paymentMethodVal = "cash";
         paymentStatusVal = "cash_pending";
-      } else if (rawPaymentStatus === "cash_received") {
+      } else if (rawPaymentStatus.includes("cash_received") || rawPaymentStatus.includes("cash-received")) {
         paymentMethodVal = "cash_received";
         paymentStatusVal = "cash_received";
       }
 
       return {
-        id: row[0],
+        id: String(row[0]),
         restaurant_id: row[1],
         customer_name: row[2],
         table_no: row[3],
