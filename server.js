@@ -146,6 +146,56 @@ app.post("/api/orders", async (req, res) => {
   }
 });
 
+app.post("/api/update-order-status", async (req, res) => {
+  try {
+    const { orderId, status } = req.body;
+    const sheets = getSheetsInstance();
+    const response = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: RANGE });
+    const rows = response.data.values;
+    
+    let rowIndex = -1;
+    if (rows) {
+      for (let i = 1; i < rows.length; i++) {
+        if (String(rows[i][0]) === String(orderId)) { 
+          rowIndex = i + 1; 
+          break; 
+        }
+      }
+    }
+
+    if (rowIndex === -1) return res.status(404).json({ error: "Order not found" });
+
+    if (status === "confirmed") {
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `Sheet1!J${rowIndex}`,
+        valueInputOption: "USER_ENTERED",
+        resource: { values: [["cash_received"]] }
+      });
+    }
+
+    const rowData = rows[rowIndex - 1];
+    const updatedOrder = {
+      id: rowData[0],
+      restaurant_id: rowData[1],
+      customer_name: rowData[2],
+      table_no: rowData[3],
+      items: typeof rowData[4] === 'string' ? JSON.parse(rowData[4] || "[]") : rowData[4],
+      notes: rowData[5],
+      total: rowData[6],
+      status: rowData[7],
+      placed_at: rowData[8],
+      payment_status: "cash_received",
+      paymentMethod: "cash_received"
+    };
+
+    res.json({ success: true, order: updatedOrder });
+  } catch (error) {
+    console.error("❌ Update Order Status Error:", error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.post("/api/create-checkout-session", async (req, res) => {
   try {
     const { total, orderId, tableNo, customerName } = req.body;
