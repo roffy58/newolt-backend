@@ -3,7 +3,7 @@ import cors from "cors";
 import Stripe from "stripe";
 import admin from "firebase-admin";
 
-// ⚡ Same Clean Format as Google Sheets Authentication
+// ⚡ Hardcoded credentials with safe newline replacement
 const serviceAccount = {
   type: "service_account",
   project_id: "nevolt-backend",
@@ -35,7 +35,7 @@ nvpFGTxT+1RNkzBnYPhTcr4IGMHOOf70Czep5rb8CgYEA5EwpSuf4NGae0mGtdD8S
 rquzxWoWHvhicELBfmO1tbkOrRGeoFRmk7F2oS5c9zl2tQ1hlcLFBK9PZgvgcZyo
 Sy6IoH7/5S0Y8KvH8YqJa/aH1QJ/SaGhOvnWmzz0Kdskk0prwLmVC3O1AgiQSfmu
 ndht46g12lPjTXkjoQAdBSm0=
------END PRIVATE KEY-----`,
+-----END PRIVATE KEY-----`.replace(/\\n/g, '\n'),
   client_email: "firebase-adminsdk-fbsvc@nevolt-backend.iam.gserviceaccount.com",
   client_id: "101471796744125862220",
   auth_uri: "https://accounts.google.com/o/oauth2/auth",
@@ -45,7 +45,7 @@ ndht46g12lPjTXkjoQAdBSm0=
   universe_domain: "googleapis.com"
 };
 
-// ⚡ Initialize Firebase safely
+// ⚡ Initialize Firebase Safely
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount)
 });
@@ -58,7 +58,6 @@ app.use(express.json());
 
 // --- ROUTES ---
 
-// 1. FETCH ORDERS
 app.get("/api/orders", async (_, res) => {
   try {
     const snapshot = await db.collection('orders').orderBy('placed_at', 'desc').get();
@@ -69,7 +68,6 @@ app.get("/api/orders", async (_, res) => {
   }
 });
 
-// 2. PLACE ORDER
 app.post("/api/orders", async (req, res) => {
   try {
     const { restaurant_id, customer_name, table_no, items, notes, total, payment_status } = req.body;
@@ -92,10 +90,9 @@ app.post("/api/orders", async (req, res) => {
   }
 });
 
-// 3. UPDATE ORDER STATUS (e.g., cash_received)
 app.post("/api/update-order-status", async (req, res) => {
   try {
-    const { orderId, status } = req.body;
+    const { orderId } = req.body;
     const orderRef = db.collection('orders').doc(orderId);
 
     await orderRef.update({ 
@@ -110,7 +107,6 @@ app.post("/api/update-order-status", async (req, res) => {
   }
 });
 
-// 4. PATCH ORDER (General Status Update)
 app.patch("/api/orders/:id", async (req, res) => {
   try {
     const { id } = req.params;
@@ -125,7 +121,6 @@ app.patch("/api/orders/:id", async (req, res) => {
   }
 });
 
-// 5. CREATE CHECKOUT SESSION
 app.post("/api/create-checkout-session", async (req, res) => {
   try {
     const { total, orderId, tableNo, customerName } = req.body;
