@@ -18,19 +18,32 @@ app.use(express.json());
 
 // --- ROUTES ---
 
-app.get("/api/orders", async (_, res) => {
+app.get("/api/orders", async (req, res) => {
   try {
-    const snapshot = await db.collection('orders').orderBy('placed_at', 'desc').get();
+    const { restaurant_id } = req.query;
+    let query = db.collection('orders');
+    
+    // Agar restaurant_id di hai toh filter karo, warna saare fetch kar lo
+    if (restaurant_id) {
+      query = query.where('restaurant_id', '==', restaurant_id);
+    }
+
+    const snapshot = await query.orderBy('placed_at', 'desc').get();
     const orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     res.json(orders);
   } catch (error) {
+    console.error("❌ Fetch Orders Error:", error);
     res.status(500).json({ error: error.message });
   }
 });
 
 app.post("/api/orders", async (req, res) => {
   try {
-    const { restaurant_id, customer_name, table_no, items, notes, total, payment_status } = req.body;
+    const { 
+      restaurant_id, customer_name, table_no, items, notes, total, 
+      payment_status, paymentType, paymentStatus, status 
+    } = req.body;
+    
     const newOrder = {
       restaurant_id,
       customer_name,
@@ -38,14 +51,17 @@ app.post("/api/orders", async (req, res) => {
       items: typeof items === "string" ? JSON.parse(items) : items,
       notes: notes || "",
       total: total || 0,
-      status: "pending",
+      status: status || "pending",
       placed_at: new Date().toISOString(),
-      payment_status: payment_status || "paid"
+      payment_status: payment_status || "paid",
+      paymentType: paymentType || "cash",
+      paymentStatus: paymentStatus || "pending"
     };
 
     const docRef = await db.collection('orders').add(newOrder);
     res.status(201).json({ id: docRef.id, ...newOrder });
   } catch (error) {
+    console.error("❌ Order Creation Error:", error);
     res.status(500).json({ error: error.message });
   }
 });
