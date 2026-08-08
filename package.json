@@ -13,6 +13,7 @@
     "express": "^4.19.2",
     "googleapis": "^140.0.0",
     "stripe": "^15.0.0",
+    "socket.io": "^4.7.5",
     "firebase-admin": "^11.10.0"
   },
   "devDependencies": {
