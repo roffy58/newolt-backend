@@ -21,15 +21,19 @@ app.use(express.json());
 app.get("/api/orders", async (req, res) => {
   try {
     const { restaurant_id } = req.query;
-    let query = db.collection('orders');
     
-    // Agar restaurant_id di hai toh filter karo, warna saare fetch kar lo
+    // Sirf collection fetch karo, database level par koi index query ki zarurat nahi
+    const snapshot = await db.collection('orders').get();
+    let orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+    // Filter JavaScript side par karo (No Firebase index required)
     if (restaurant_id) {
-      query = query.where('restaurant_id', '==', restaurant_id);
+      orders = orders.filter(order => order.restaurant_id === restaurant_id);
     }
 
-    const snapshot = await query.orderBy('placed_at', 'desc').get();
-    const orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    // Sort JavaScript side par karo (latest first)
+    orders.sort((a, b) => new Date(b.placed_at || 0) - new Date(a.placed_at || 0));
+
     res.json(orders);
   } catch (error) {
     console.error("❌ Fetch Orders Error:", error);
@@ -43,7 +47,7 @@ app.post("/api/orders", async (req, res) => {
       restaurant_id, customer_name, table_no, items, notes, total, 
       payment_status, paymentType, paymentStatus, status 
     } = req.body;
-    
+
     const newOrder = {
       restaurant_id,
       customer_name,
