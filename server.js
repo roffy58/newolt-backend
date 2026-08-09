@@ -101,11 +101,13 @@ app.post("/api/update-order-status", async (req, res) => {
 
     await orderRef.update(updateData);
 
-    // ⚡ WebSocket broadcast taaki sabhi clients ko update mil jaye
-    io.emit("orderUpdated", { id: orderId, ...updateData });
-
     const updatedDoc = await orderRef.get();
-    res.json({ success: true, order: { id: orderId, ...updatedDoc.data() } });
+    const finalData = { id: orderId, ...updatedDoc.data() };
+
+    // ⚡ WebSocket broadcast with complete updated document
+    io.emit("orderUpdated", finalData);
+
+    res.json({ success: true, order: finalData });
   } catch (error) {
     console.error("❌ Update Status Error:", error);
     res.status(500).json({ error: error.message });
@@ -117,18 +119,22 @@ app.patch("/api/orders/:id", async (req, res) => {
     const { id } = req.params;
     const updateData = {};
     
-    // ⚡ Sabhi possible payment aur status fields ko handle kar liya hai
+    // ⚡ Accept all variations to prevent missing fields
     if (req.body.status) updateData.status = req.body.status;
     if (req.body.payment_status) updateData.payment_status = req.body.payment_status;
     if (req.body.paymentStatus) updateData.paymentStatus = req.body.paymentStatus;
     if (req.body.paymentMethod) updateData.paymentMethod = req.body.paymentMethod;
 
-    await db.collection('orders').doc(id).update(updateData);
+    const orderRef = db.collection('orders').doc(id);
+    await orderRef.update(updateData);
 
-    // ⚡ WebSocket broadcast zaroori hai taaki Menu aur Dashboard turant sync ho jayein
-    io.emit("orderUpdated", { id, ...updateData });
+    // ⚡ Fetch fresh document from Firestore and broadcast
+    const updatedDoc = await orderRef.get();
+    const finalUpdatedData = { id, ...updatedDoc.data() };
 
-    res.json({ id, ...updateData, message: "Updated in Firebase!" });
+    io.emit("orderUpdated", finalUpdatedData);
+
+    res.json(finalUpdatedData);
   } catch (error) {
     console.error("❌ Patch Order Error:", error);
     res.status(500).json({ error: error.message });
