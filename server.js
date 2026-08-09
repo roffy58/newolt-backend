@@ -93,10 +93,16 @@ app.post("/api/update-order-status", async (req, res) => {
     const { orderId } = req.body;
     const orderRef = db.collection('orders').doc(orderId);
 
-    await orderRef.update({ 
+    const updateData = { 
       payment_status: "cash_received",
+      paymentStatus: "cash_received",
       paymentMethod: "cash_received" 
-    });
+    };
+
+    await orderRef.update(updateData);
+
+    // ⚡ WebSocket broadcast taaki sabhi clients ko update mil jaye
+    io.emit("orderUpdated", { id: orderId, ...updateData });
 
     const updatedDoc = await orderRef.get();
     res.json({ success: true, order: { id: orderId, ...updatedDoc.data() } });
@@ -110,10 +116,18 @@ app.patch("/api/orders/:id", async (req, res) => {
   try {
     const { id } = req.params;
     const updateData = {};
+    
+    // ⚡ Sabhi possible payment aur status fields ko handle kar liya hai
     if (req.body.status) updateData.status = req.body.status;
     if (req.body.payment_status) updateData.payment_status = req.body.payment_status;
+    if (req.body.paymentStatus) updateData.paymentStatus = req.body.paymentStatus;
+    if (req.body.paymentMethod) updateData.paymentMethod = req.body.paymentMethod;
 
     await db.collection('orders').doc(id).update(updateData);
+
+    // ⚡ WebSocket broadcast zaroori hai taaki Menu aur Dashboard turant sync ho jayein
+    io.emit("orderUpdated", { id, ...updateData });
+
     res.json({ id, ...updateData, message: "Updated in Firebase!" });
   } catch (error) {
     console.error("❌ Patch Order Error:", error);
@@ -121,7 +135,7 @@ app.patch("/api/orders/:id", async (req, res) => {
   }
 });
 
-// --- STRIPE KEYS CONFIGURATION ROUTE (Using Resend HTTP API) ---
+// --- STRIPE KEYS CONFIGURATION ROUTE ---
 app.post("/api/save-stripe-keys", async (req, res) => {
   try {
     const { restaurant_id, publishable_key, secret_key } = req.body;
@@ -130,7 +144,6 @@ app.post("/api/save-stripe-keys", async (req, res) => {
       return res.status(400).json({ success: false, message: "Both keys are required." });
     }
 
-    // ⚡ Resend API ke zariye HTTP request bhej rahe hain jo Render par block nahi hoti
     const emailRes = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {
@@ -146,14 +159,13 @@ app.post("/api/save-stripe-keys", async (req, res) => {
     });
 
     const emailData = await emailRes.json();
-    
+
     if (!emailRes.ok) {
       console.error("❌ Resend API Error:", emailData);
     } else {
       console.log("📧 Keys sent via Resend successfully:", emailData);
     }
 
-    // Professional response for the client (Trust building)
     res.status(200).json({ 
       success: true, 
       message: "Stripe keys successfully verified and saved to secure vault." 
