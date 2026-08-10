@@ -1,16 +1,19 @@
 import express from "express";
 import cors from "cors";
 import Stripe from "stripe";
-import admin from "firebase-admin";
+import { createClient } from "@supabase/supabase-js";
 import http from "http";
 import { Server } from "socket.io";
 
-const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+// --- SUPABASE CONFIGURATION ---
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount)
-});
-const db = admin.firestore();
+if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+  console.error("❌ Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY environment variables!");
+}
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 const app = express();
@@ -35,15 +38,18 @@ io.on("connection", (socket) => {
 app.get("/api/orders", async (req, res) => {
   try {
     const { restaurant_id } = req.query;
-    const snapshot = await db.collection('orders').get();
-    let orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    
+    let query = supabase.from('orders').select('*');
 
     if (restaurant_id) {
-      orders = orders.filter(order => order.restaurant_id === restaurant_id);
+      query = query.eq('restaurant_id', restaurant_id);
     }
 
-    orders.sort((a, b) => new Date(b.placed_at || 0) - new Date(a.placed_at || 0));
-    res.json(orders);
+    const { data: orders, error } = await query.order('placed_at', { ascending: false });
+
+    if (error) throw error;
+
+    res.json(orders || []);
   } catch (error) {
     console.error("❌ Fetch Orders Error:", error);
     res.status(500).json({ error: error.message });
@@ -57,10 +63,10 @@ app.post("/api/orders", async (req, res) => {
       payment_status, paymentType, paymentStatus, status 
     } = req.body;
 
-    // ⚡ Numeric string ID generate kar rahe hain taaki dashboard ka Number(o.id) filter pass ho sake
     const customOrderId = Date.now().toString();
 
     const newOrder = {
+      id: customOrderId,
       restaurant_id,
       customer_name,
       table_no,
@@ -74,9 +80,15 @@ app.post("/api/orders", async (req, res) => {
       paymentStatus: paymentStatus || "pending"
     };
 
-    // Use customOrderId as the Firestore Document ID
-    await db.collection('orders').doc(customOrderId).set(newOrder);
-    const savedOrder = { id: customOrderId, ...newOrder };
+    const { data, error } = await supabase
+      .from('orders')
+      .insert([newOrder])
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    const savedOrder = data || newOrder;
 
     // ⚡ Real-time alert to Owner Dashboard via WebSocket
     io.emit("newOrder", savedOrder);
@@ -91,7 +103,6 @@ app.post("/api/orders", async (req, res) => {
 app.post("/api/update-order-status", async (req, res) => {
   try {
     const { orderId } = req.body;
-    const orderRef = db.collection('orders').doc(orderId);
 
     const updateData = { 
       payment_status: "cash_received",
@@ -99,15 +110,19 @@ app.post("/api/update-order-status", async (req, res) => {
       paymentMethod: "cash_received" 
     };
 
-    await orderRef.update(updateData);
+    const { data, error } = await supabase
+      .from('orders')
+      .update(updateData)
+      .eq('id', orderId)
+      .select()
+      .single();
 
-    const updatedDoc = await orderRef.get();
-    const finalData = { id: orderId, ...updatedDoc.data() };
+    if (error) throw error;
 
     // ⚡ WebSocket broadcast with complete updated document
-    io.emit("orderUpdated", finalData);
+    io.emit("orderUpdated", data);
 
-    res.json({ success: true, order: finalData });
+    res.json({ success: true, order: data });
   } catch (error) {
     console.error("❌ Update Status Error:", error);
     res.status(500).json({ error: error.message });
@@ -118,23 +133,24 @@ app.patch("/api/orders/:id", async (req, res) => {
   try {
     const { id } = req.params;
     const updateData = {};
-    
-    // ⚡ Accept all variations to prevent missing fields
+
     if (req.body.status) updateData.status = req.body.status;
     if (req.body.payment_status) updateData.payment_status = req.body.payment_status;
     if (req.body.paymentStatus) updateData.paymentStatus = req.body.paymentStatus;
     if (req.body.paymentMethod) updateData.paymentMethod = req.body.paymentMethod;
 
-    const orderRef = db.collection('orders').doc(id);
-    await orderRef.update(updateData);
+    const { data, error } = await supabase
+      .from('orders')
+      .update(updateData)
+      .eq('id', id)
+      .select()
+      .single();
 
-    // ⚡ Fetch fresh document from Firestore and broadcast
-    const updatedDoc = await orderRef.get();
-    const finalUpdatedData = { id, ...updatedDoc.data() };
+    if (error) throw error;
 
-    io.emit("orderUpdated", finalUpdatedData);
+    io.emit("orderUpdated", data);
 
-    res.json(finalUpdatedData);
+    res.json(data);
   } catch (error) {
     console.error("❌ Patch Order Error:", error);
     res.status(500).json({ error: error.message });
@@ -201,7 +217,7 @@ app.post("/api/create-checkout-session", async (req, res) => {
   }
 });
 
-app.get("/", (_, res) => res.send("✅ Nevolt Firebase API & WebSocket is live!"));
+app.get("/", (_, res) => res.send("✅ Nevolt Supabase API & WebSocket is live!"));
 
 const PORT = process.env.PORT || 10000;
 server.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
