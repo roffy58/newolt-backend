@@ -204,7 +204,7 @@ app.post("/api/create-checkout-session", async (req, res) => {
     const { total, orderId, tableNo, customerName } = req.body;
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
-      line_items: [{ price_data: { currency: 'inr', product_data: { name: `Table #${tableNo || 'N/A'} - Order (${customerName || 'Customer'})` }, unit_amount: Math.round(Number(total || 0) * 100) }, quantity: 1 }],
+      line_items: [{ price_data: { currency: 'usd', product_data: { name: `Table #${tableNo || 'N/A'} - Order (${customerName || 'Customer'})` }, unit_amount: Math.round(Number(total || 0) * 100) }, quantity: 1 }],
       mode: 'payment',
       success_url: `https://dine-2.onrender.com/?payment=success`,
       cancel_url: `https://dine-2.onrender.com/`,
